@@ -1,5 +1,6 @@
 #include "imgui_impl_renderware.h"
 #include "main.h"
+
 #include <new>
 #include <cstring>
 #include <algorithm>
@@ -159,9 +160,7 @@ void ImGui_ImplRenderWare_RenderDrawData(ImDrawData* draw_data)
     }
 
     RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)0);
-    CRect zero;
-    zero.left = zero.bottom = zero.right = zero.top = 0;
-    CWidget::SetScissor(zero);
+    CWidget::SetScissor(CRect(0.0f, 0.0f, 0.0f, 0.0f));
 }
 bool ImGui_ImplRenderWare_CreateDeviceObjects()
 {

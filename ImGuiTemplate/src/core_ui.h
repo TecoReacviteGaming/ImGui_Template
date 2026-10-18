@@ -1,7 +1,7 @@
 #pragma once
 
 #include <backends/imgui_impl_renderware.h>
-#include "imgui_internal.h"
+#include <imgui_internal.h>
 
 void InitUI();
 void RenderUI();

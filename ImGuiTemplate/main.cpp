@@ -1,11 +1,25 @@
 #include <mod/amlmod.h>
 #include <mod/logger.h>
 #include <sautils.h>
-#include <main.h>
+
+// source files
+#include "main.h"
 #include "src/core_ui.h"
-#include <aml-psdk/game_sa/Events.h>
-#include <aml-psdk/game_sa/entity/Camera.h>
-#include <aml-psdk/game_sa/base/Timer.h>
+
+/*
+-- define this if you don't want to show ImGui in-menu
+#define IMGUI_EXCLUDE_MENU
+
+-- define this if you don't want to show ImGui in-game
+#define IMGUI_EXCLUDE_GAME
+*/
+
+// AML PSDK
+#include "aml-psdk/game_sa/Events.h"
+#include "aml-psdk/game_sa/entity/Camera.h"
+#include "aml-psdk/game_sa/base/Timer.h"
+#include "aml-psdk/game_sa/engine/OS.h"
+#include "aml-psdk/game_sa/engine/MobileMenu.h"
 
 MYMOD(net.ocornut.teco.imgui, ImGui Template, 1.0, ocornut & TecoReacvite)
 BEGIN_DEPLIST()
@@ -20,81 +34,69 @@ ISAUtils* sautils = nullptr;
 eLoadedGame curGame = Unknown;
 
 // touch system
-static char nClearMousePos = 0;
+static char g_nClearMousePos = 0;
 static bool g_bIgnoredFingers[10] = {false};
-static bool g_fingerOnUI[10] = {false};
-static uint8_t g_fingerAsMouse = 0xFF;
-DECL_HOOKv(AND_TouchEvent, int actionType, int trackNum, int x, int y)
+static bool g_bFingerOnUI[10] = {false};
+static uint8_t g_bFingerAsMouse = 0xFF;
+static bool g_bAllowGuiTouchOnMenu = false;
+DECL_HOOKv(TouchEvent, int actionType, int trackNum, int x, int y)
 {
     if (!IsInitialized() || trackNum < 0 || trackNum >= 10)
     {
-        AND_TouchEvent(actionType, trackNum, x, y);
+        TouchEvent(actionType, trackNum, x, y);
         return;
     }
     ImGuiIO& io = ImGui::GetIO();
-    //AddGuiLog("Touch-log: %d trackNum | %d actionType", trackNum, actionType);
 
     switch (actionType)
     {
         case 1: // touch release
         {
-            if (g_fingerAsMouse == trackNum)
+            if (g_bFingerAsMouse == trackNum)
             {
-                nClearMousePos = 3;
+                g_nClearMousePos = 3;
                 io.AddMouseButtonEvent(0, false);
-                g_fingerAsMouse = 0xFF;
+                g_bFingerAsMouse = 0xFF;
             }
             break;
         }
         
         case 2: // touch push
         {
-            const bool bCanUseUI = (CTimer::m_UserPause != true && TheCamera.GetScreenFadeStatus() != 2);
-            g_fingerOnUI[trackNum] = bCanUseUI && (io.WantTextInput || IsTouchedOverUI((float)x, (float)y));
-            if (g_fingerOnUI[trackNum] && g_fingerAsMouse == 0xFF)
+            const bool bCanUseUI = (CTimer::IsPaused() == g_bAllowGuiTouchOnMenu && TheCamera.GetScreenFadeStatus() != 2);
+            g_bFingerOnUI[trackNum] = bCanUseUI && (io.WantTextInput || IsTouchedOverUI((float)x, (float)y));
+            if (g_bFingerOnUI[trackNum] && g_bFingerAsMouse == 0xFF)
             {
                 io.AddMousePosEvent((float)x, (float)y);
                 io.AddMouseButtonEvent(0, true);
-                g_fingerAsMouse = trackNum;
+                g_bFingerAsMouse = trackNum;
             }
             break;
         }
 
         case 3: // touch move
         {
-            if (g_fingerAsMouse == trackNum)
+            if (g_bFingerAsMouse == trackNum)
                 io.AddMousePosEvent((float)x, (float)y);
             break;
         }
     }
     
-    const bool swallow = g_fingerOnUI[trackNum];
-    if (actionType == 1) g_fingerOnUI[trackNum] = false;
-    if (!swallow) AND_TouchEvent(actionType, trackNum, x, y);
+    const bool swallow = g_bFingerOnUI[trackNum];
+    if (actionType == 1) g_bFingerOnUI[trackNum] = false;
+    if (!swallow) TouchEvent(actionType, trackNum, x, y);
 }
 
 // keyboard system
-void (*OS_KeyboardRequest)(int);
 int* NVtoKK;
 char *KKtoChar, *KKtoShiftedChar;
-DECL_HOOKv(AND_KeyboardEvent, bool pushed, int keyNum, int ctrl_or_shift, int alwaysZero)
+DECL_HOOKv(KeyboardEvent, bool pushed, int keyNum, int ctrl_or_shift, int alwaysZero)
 {
     ImGuiIO& io = ImGui::GetIO();
     if (!io.WantTextInput)
     {
         AND_KeyboardEvent(pushed, keyNum, ctrl_or_shift, alwaysZero);
         return;
-    }
-
-    static bool bLoggedPreviously = false;
-    if (!bLoggedPreviously)
-    {
-        AddGuiLog("Keyboard-log: %d keyNum", keyNum);
-        bLoggedPreviously = true;
-    }
-    else
-    {
-        bLoggedPreviously = false;
     }
 
     switch (keyNum)
@@ -121,12 +123,11 @@ DECL_HOOKv(AND_KeyboardEvent, bool pushed, int keyNum, int ctrl_or_shift, int al
 
 // ImGui rendering core
 static bool g_bLastTextInput = false;
-DECL_HOOKv(Render2DStuff)
+void RenderImGui()
 {
-    Render2DStuff();
     RenderUI();
     ImGuiIO& io = ImGui::GetIO();
-    if (nClearMousePos > 0 && --nClearMousePos == 0) io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    if (g_nClearMousePos > 0 && --g_nClearMousePos == 0) io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     if (io.WantTextInput != g_bLastTextInput)
     {
         OS_KeyboardRequest(io.WantTextInput ? 1 : 0);
@@ -158,15 +159,27 @@ ON_MOD_LOAD()
     }
 
     // game vars
-    SET_TO(OS_KeyboardRequest, aml->GetSym(hGame, "_Z18OS_KeyboardRequesti"));
     SET_TO(NVtoKK, aml->GetSym(hGame, "NVtoKK"));
     SET_TO(KKtoChar, aml->GetSym(hGame, "KKtoChar"));
     SET_TO(KKtoShiftedChar, aml->GetSym(hGame, "KKtoShiftedChar"));
     
     // hooks/events
     Events::initRwEvent.after += InitUI;
+#ifndef IMGUI_EXCLUDE_GAME
+    Events::drawingEvent.after += []()
+    {
+        g_bAllowGuiTouchOnMenu = false;
+        RenderImGui();
+    };
+#endif
+#ifndef IMGUI_EXCLUDE_MENU
+    Events::menuDrawingEvent.after += []()
+    {
+        g_bAllowGuiTouchOnMenu = true;
+        RenderImGui();
+    };
+#endif
     Events::shutdownRwEvent.before += ShutdownUI;
-    HOOK(Render2DStuff, aml->GetSym(hGame, "_Z13Render2dStuffv"));
-    HOOK(AND_TouchEvent, aml->GetSym(hGame, "_Z14AND_TouchEventiiii"));
-    HOOK(AND_KeyboardEvent, aml->GetSym(hGame, "_Z17AND_KeyboardEventbiib"));
+    HOOK(TouchEvent, AND_TouchEvent);
+    HOOK(KeyboardEvent, AND_KeyboardEvent);
 }
