@@ -4,7 +4,6 @@
 #include <cstring>
 #include <algorithm>
 
-int TotalDrawCalls = 0;
 static_assert(sizeof(ImDrawIdx) == sizeof(RwImVertexIndex), "ImDrawIdx must be 16-bit to match RwImVertexIndex");
 RwRaster*     g_FontRaster       = nullptr;
 RwIm2DVertex* g_pVB              = nullptr;
@@ -104,7 +103,6 @@ void ImGui_ImplRenderWare_RenderDrawData(ImDrawData* draw_data)
     ResetState();
 
     int vtx_offset = 0;
-    int DrawCallsCounter = 0;
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
@@ -153,14 +151,12 @@ void ImGui_ImplRenderWare_RenderDrawData(ImDrawData* draw_data)
                 boundTex = tex;
             }
 
-            ++DrawCallsCounter;
             RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST,
                 &g_pVB[vtx_offset], (RwInt32)vtx_cnt,
                 (RwImVertexIndex*)(idx_base + pcmd->IdxOffset), (RwInt32)pcmd->ElemCount);
         }
         vtx_offset += vtx_cnt;
     }
-    TotalDrawCalls = DrawCallsCounter;
 
     RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)0);
     CRect zero;

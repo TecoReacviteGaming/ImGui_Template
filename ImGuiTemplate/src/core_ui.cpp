@@ -3,7 +3,7 @@
 
 /* user resources start */
 // OWN vars
-char buf[500] = "";
+char buf[256] = "";
 ImGuiTextBuffer logBuf;
 bool ScrollToBottom = false;
 static bool show_demo_window = true;
@@ -53,9 +53,8 @@ namespace
         ImGui::SetNextWindowBgAlpha(0.70f);
         ImGui::SetNextWindowSizeConstraints(ImVec2(io.DisplaySize.x * 0.23f, io.DisplaySize.y * 0.36f), ImVec2(io.DisplaySize.x, io.DisplaySize.y));
 
-        ImGui::Begin("ImGUI Template", NULL, ImGuiWindowFlags_None | ImGuiWindowFlags_NoTitleBar);
+        ImGui::Begin("ImGUI Template", NULL, ImGuiWindowFlags_None);
         ImGui::Text("ImGUI FPS: %.2f", io.Framerate);
-        ImGui::Text("InGUI DrawCalls: %d", TotalDrawCalls);
         ImGui::BeginChild("Scrolling", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true, ImGuiWindowFlags_HorizontalScrollbar);
         ImGui::TextUnformatted(logBuf.begin());
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
